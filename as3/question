@@ -1,0 +1,343 @@
+#!/bin/bash
+function displayUsage () {
+        echo "Usage:[] means optional:"
+	echo -e "\tquestion create name [question]"
+	echo -e "\tquestion answer question_id name [answer]"
+	echo -e "\tquestion list [user]"
+	echo -e "\tquestion vote up|down question_id [answer id]"
+        echo -e "\tquestion view question_id ..."
+}
+
+function handleCreate() {
+        name="$1"
+        content="$2"
+        echo "the name is $name, content is $content"
+        
+        # question name validation
+        if [[ "$name" == */* ]]
+                then
+                echo 1>&2 "Invalid question name!"
+                exit 127
+        fi
+
+        # check if the ~/.question/questions directory exists
+        if [ ! -d ~/.question/questions ]
+                then
+                mkdir ~/.question/questions
+        fi
+
+        # check if the question name is already used
+        if [ -f ~/.question/questions/"$name" ]
+                then
+                echo 1>&2 "sorry you've already created a question using same name $name, please choose another name."
+                exit 127
+        fi
+
+        # chedk if the question content is empty
+        if [ -z "$content" ]
+                then
+                echo "you've not entered the content, please enter:"
+                read content
+                echo "content now: $content"
+        fi
+
+        # check if the question content is valid
+        if [ -n "$content" ]
+                then
+                if [[ "$content" == *====* ]] || [ "$content" = " " ]
+                        then
+                        echo 1>&2 "invalid content $content"
+                        exit 127
+                else
+                        touch ~/.question/questions/"$name" && echo "$content" >> ~/.question/questions/"$name"
+                fi
+        fi
+        chmod -R 755 ~/.question/questions
+        exit 0
+}
+
+function handleAnswer() {
+        qid="$1"     # question id [user/questionName]
+        name="$2"    # answer id
+        answer="$3"  # this variable is optional
+        # echo "the qid is $qid, name is $name, answer is $answer."
+
+	quser=$(echo "$qid" | awk -F"/" '{print $1}')
+        qname=$(echo "$qid" | awk -F"/" '{print $2}')
+        # echo "quser is $quser"
+        # echo "qname is $qname"
+
+        # check if the qid is valid
+        if [ -f /home/$quser/.question/questions/"$qname" ]
+                then
+                echo "yay. the question you are going to answer exists!"
+        else
+                echo 1>&2 "no such question: $qid"
+		exit 127
+        fi
+
+        # question name validation
+        if [[ "$name" == */* ]]
+                then
+                echo 1>&2 "Invalid answer name!"
+                exit 127
+        fi
+
+        # check if the ~/.question/answers directory exists
+        if [ ! -d ~/.question/answers ]
+                then
+                mkdir ~/.question/answers && chmod -R 755 ~/.question/answers
+        fi
+
+        # check if the answer name is already used
+        if [ -f ~/.question/answers/"$name" ]
+                then
+                echo 1>&2 "sorry you've the answer name $name already exists, please choose another name."
+                exit 127
+        fi
+
+        # chedk if the answer content is empty
+        if [ -z "$answer" ]
+                then
+                echo "you've not entered the content, please enter:"
+                read answer
+                echo "content now: $answer"
+        fi
+
+        # check if the question content is valid
+        if [[ "$answer" == *====* ]] || [ -z "$answer" ] || [ "$answer" = " " ]
+                then
+                echo 1>&2 "invalid content $answer"
+                exit 127
+        else
+		if [ ! -d ~/.question/answers/$quser/"$qname" ]
+			then
+			mkdir -p ~/.question/answers/$quser/"$qname"
+		fi
+                touch ~/.question/answers/"$qid"/"$name" && echo "$answer" >> ~/.question/answers/"$qid"/"$name"  
+        fi
+        chmod -R 755 ~/.question/answers
+        exit 0
+}
+
+function handleList() {
+        user="$1"
+
+        if [ -z "$user" ] || [ "$user" = " " ]
+                then
+                IFS=$'\n' user=($(cat /home/unixtool/data/question/users))
+	fi
+        for i in ${user[*]}
+        do
+                if [ -r /home/$i/.question/questions/ ]
+                        then
+                        list=($(ls /home/$i/.question/questions 2>/dev/null))
+                        for var in ${list[*]}
+                        do
+                                echo "$i/$var"
+                        done
+                fi
+        done
+        exit 0
+}
+
+function calculateVote() {
+        # echo "in calculate vote: quesr is $1, qname is $2, content is $3"
+        quser="$1"
+        qname="$2"
+        content="$3"
+        up=0
+        down=0
+
+        IFS=$'\n' users=($(cat /home/unixtool/data/question/users))
+        for u in ${users[*]}
+        do
+                if [ -r /home/$u/.question/votes/"$quser"/"$qname" ]
+                        then
+                        voteFile=($(find /home/$u/.question/votes/"$quser"/"$qname" -type f 2>/dev/null))
+
+                        # if [ -z "$content" ]
+                        #         then
+                        #         vote=($(awk '{ vote[substr($0, length($1)+2)] = $1 } 
+                        #         END { for (v in vote) { print v, vote[v] } }' $voteFile | grep "^ "))
+                        # else
+                        #         vote=($(awk '{ vote[substr($0, length($1)+2)] = $1 } 
+                        #         END { for (v in vote) { print v, vote[v] } }' $voteFile | grep "$content" | cut -d' ' -f2))
+                        # fi
+                        if [ -z "$content" ]
+                                then
+                                vote=($(cat $voteFile | egrep "(up|down)( )?$" | tail -1))
+                        else
+                                vote=($(cat $voteFile | egrep "(up|down) $content*$" | tail -1))
+                        fi
+                        # echo "$u: $vote"
+                        if [[ "$vote" == up* ]]
+                                then
+                                up=$(($up + 1)) 
+                        elif [[ "$vote" == down* ]]
+                                then
+                                down=$(($down + 1))
+                        fi
+                        # echo "up is $up, down is $down"
+                fi
+        done
+        echo $(($up - $down))
+}
+
+function viewQuestion() {
+        #echo "in viewQuestion: quser is $1, qname is $2"
+        quser="$1"
+        qname="$2"
+
+        if [ ! -f /home/$quser/.question/questions/"$qname" ]
+                then
+                echo 1>&2 "no such question: $quser/$qname"
+                exit 127
+        else
+                echo -e "Question: "
+                calculateVote "$quser" "$qname"
+                cat /home/$quser/.question/questions/"$qname" 2>/dev/null
+                echo "===="
+                IFS=$'\n' users=($(cat /home/unixtool/data/question/users))
+                for user in ${users[*]}
+                do
+                        if [ -r /home/$user/.question/answers/"$quser"/"$qname"/ ]
+                                then
+                                a=($(ls /home/$user/.question/answers/"$quser"/"$qname"/ 2>/dev/null))
+                                for var in ${a[*]}
+                                do
+                                        echo "answer by: $user/$var"
+                                        calculateVote "$quser" "$qname" "$user/$var"
+                                        cat /home/"$user"/.question/answers/"$quser"/"$qname"/"$var" 2>/dev/null
+                                        echo "===="
+                                done
+                        fi
+                done
+                echo ""
+        fi
+}
+
+function handleView() {
+        for arg in "$@"
+        do
+                if [ "$arg" != "view" ]
+                        then
+                        quser=$(echo "$arg" | awk -F"/" '{print $1}')
+                        qname=$(echo "$arg" | awk -F"/" '{print $2}')
+                        # echo "quser is $quser, qname is $qname"
+                        viewQuestion "$quser" "$qname"
+                fi
+        done
+        exit 0
+}
+
+function handleVote() {
+        vote="$1"
+        qid="$2"
+        aid="$3"        # answer id is optional
+
+        # check if question is valid and exists
+        if [ -z "$qid" ] || [[ "$qid" != */* ]]
+                then
+                echo 1>&2 "invalid question id"
+                exit 127
+        else
+                quser=$(echo "$qid" | awk -F"/" '{print $1}')
+                qname=$(echo "$qid" | awk -F"/" '{print $2}')
+                # echo "queser is $quser, qname is $qname"
+                if [ ! -f /home/$quser/.question/questions/"$qname" ]
+                        then
+                        echo 1>&2 "no such question: $quser/$qname"
+                        exit 127
+                fi
+        fi
+
+        # check if answer id is valid and exists
+        if [ -n "$aid" ] && [[ "$aid" == */* ]]
+                then
+                auser=$(echo "$aid" | awk -F"/" '{print $1}')
+                aname=$(echo "$aid" | awk -F"/" '{print $2}')
+                if [ ! -f /home/$auser/.question/answers/"$qid"/"$aname" ]
+                        then
+                        echo 1>&2 "no such answer: $auser/$aname"
+                        exit 127
+                fi
+        elif [ -n "$aid" ]
+                then
+                echo 1>&2 "invalid answer id"
+                exit 127
+        fi
+
+        # create new directory for votes
+        if [ ! -d ~/.question/votes/$quser ]
+                then
+                mkdir -p ~/.question/votes/$quser
+        fi
+        
+        touch ~/.question/votes/$quser/"$qname" && echo "$vote $aid" >> ~/.question/votes/$quser/"$qname" 
+        chmod -R 755 ~/.question/votes
+        exit 0
+}
+
+
+# the main method
+if [ ! -d ~/.question ]
+        then
+	mkdir ~/.question && chmod -R 755 ~/.question
+fi
+
+option="${1}"
+# echo "the first argument is $option"
+# echo "the second argument is $2"
+# echo "the third argument is $3  "
+# echo "the forth argument is $4"
+case ${option} in
+ create)
+        if [ $# -gt 3 ] || [ -z "$2" ]
+                then
+                echo 1>&2
+                displayUsage
+                exit 127
+        fi
+        handleCreate "$2" "$3"
+        ;;
+ answer)
+        if [ $# -gt 4 ] || [ -z "$2" ] || [ -z "$3" ]
+                then
+                echo 1>&2
+                displayUsage
+                exit 127
+        fi
+        handleAnswer "$2" "$3" "$4"
+        ;;
+ list)
+        if [ $# -gt 2 ]
+                then
+                echo 1>&2
+                displayUsage
+                exit 127
+        fi
+        handleList "$2"
+        ;;
+ view)
+        if [ $# -lt 2 ]
+                then
+                echo 1>&2
+                displayUsage
+                exit 127
+        fi
+        handleView "$@"
+        ;;
+ vote)
+        if [ $# -gt 4 ] || [ "$2" != "up"  -a "$2" != "down" ] || [ -z "$3" ]
+                then
+                echo 1>&2
+                displayUsage
+                exit 127
+        fi
+        handleVote "$2" "$3" "$4"
+        ;;
+ *)
+        displayUsage
+        ;;
+esac
