@@ -1,0 +1,11 @@
+/table/,/\/table/!d
+/table/d
+/tr>/d
+/small-state-header/d
+/^$/d
+s/&nbsp;/ /g
+s/<[^>]\+>//g
+s/^ *//g
+s/ *$//g
+s/\([0-9]\)%/\1/g
+s/\*$//g
