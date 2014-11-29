@@ -1,0 +1,32 @@
+#1 group print 3
+for i in list[3::3]:
+...     print i
+
+
+#2 group print 3
+>>> def chunker(seq, size):
+...     return (seq[pos:pos + size] for pos in xrange(0, len(seq), size))
+... 
+>>> for group in chunker(list, 3):
+...     print group
+... 
+
+#3 remove '====' from list by value
+>>> def process(list):
+...     for i in list:
+...             if i == '====':
+...                     list.remove(i)
+...             
+... 
+>>> process(list)
+
+
+#4 remove from list by index
+>>> del list[0]
+
+# redirect
+def redirect(url, message):
+	print "Content-Type: text/plain"
+	print "Refresh: 0; url=%s" % url
+	print 
+	print "%s submited successfully. Redirecting to %s" % (message, url)

@@ -1,0 +1,11 @@
+body {
+	margin: 50px;
+}
+input.hidden {
+	display: none;
+}
+hr.dashed {
+	border: 2px dashed #C0C0C0;
+	color: #FFFFFF;
+	size: 6;
+}
